@@ -1,2 +1,3 @@
 User-agent: *
 Allow: /
+Sitemap: https://mabdelstar466-dotcom.github.io/profitos-egypt/sitemap.xml
