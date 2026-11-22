@@ -96,8 +96,21 @@ let state={campaigns:[],leads:[]};
 
 const SUPABASE_URL="https://ndhscchkuahwtwpfkqxd.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY="sb_publishable_auHvksUtVlncj2pAoXfXUA_MYAdKVQ6";
-const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+let sb=null,supabaseInitPromise=null;
 let currentUser=null,workspaceId=null,workspaceTitle="",cloudQueue=Promise.resolve(),applyingUserId=null;
+function loadSupabaseScript(src){return new Promise((resolve,reject)=>{const script=document.createElement("script");script.src=src;script.async=true;script.onload=resolve;script.onerror=()=>reject(new Error("تعذر تحميل مكتبة الاتصال من "+new URL(src).hostname));document.head.appendChild(script);});}
+async function ensureSupabaseClient(){
+ if(sb)return sb;
+ if(supabaseInitPromise)return supabaseInitPromise;
+ supabaseInitPromise=(async()=>{
+  if(!window.supabase?.createClient){try{await loadSupabaseScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2");}catch(e){}}
+  if(!window.supabase?.createClient){try{await loadSupabaseScript("https://unpkg.com/@supabase/supabase-js@2");}catch(e){}}
+  if(!window.supabase?.createClient)throw new Error("مكتبة الاتصال لم تُحمّل. جرّب إيقاف مانع الإعلانات أو افتح الصفحة في نافذة خفية.");
+  sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+  return sb;
+ })();
+ try{return await supabaseInitPromise;}finally{supabaseInitPromise=null;}
+}
 function setCloudStatus(label,kind=""){const el=$("cloudStatus");if(el){el.textContent=label;el.className="tag cloudpill "+kind}}
 function authMessage(message,kind=""){const el=$("authFeedback");if(el){el.textContent=message;el.style.color=kind==="bad"?"var(--red)":kind==="good"?"var(--green)":"var(--muted)"}}
 function cleanDate(v){const x=String(v||"").slice(0,10);return /^\d{4}-\d{2}-\d{2}$/.test(x)?x:null}
@@ -147,31 +160,36 @@ async function applySession(session){
  catch(e){setCloudStatus("إعداد غير مكتمل","bad");authMessage("تم تسجيل الدخول، لكن قاعدة البيانات لم تكتمل: "+(e.message||"تحقق من تشغيل ملف supabase/schema.sql في SQL Editor."),"bad");}
 }
 async function sendMagicLink(){
+ const btn=$("magicLinkBtn"),original=btn.textContent;
  const email=$("authEmail").value.trim();
- if(!email){authMessage("اكتب بريدك الإلكتروني أولًا.","bad");return;}
- setCloudStatus("جاري إرسال رابط الدخول","wait");
- const {error}=await sb.auth.signInWithOtp({
-  email,
-  options:{shouldCreateUser:true,emailRedirectTo:"https://mabdelstar466-dotcom.github.io/profitos-egypt/workspace.html"}
- });
- if(error){setCloudStatus("تعذر الإرسال","bad");authMessage("لم يتم إرسال الرابط: "+error.message+" — قد يحتاج رابط الموقع إلى إضافته في Supabase Authentication → URL Configuration.","bad");return;}
- setCloudStatus("تم إرسال الرابط","good");
- authMessage("تم طلب إرسال رابط تسجيل الدخول إلى "+email+". افتح بريدك واضغط رابط الدخول. إذا لم تجده، راجع Spam / Junk.","good");
+ if(!email){authMessage("اكتب بريدك الإلكتروني أولًا.","bad");$("authEmail").focus();return;}
+ btn.disabled=true;btn.textContent="جاري الإرسال...";
+ setCloudStatus("جاري إرسال رابط الدخول","wait");authMessage("جارٍ الاتصال بخدمة الحسابات وإرسال الرابط...");
+ try{
+  const client=await ensureSupabaseClient();
+  const {error}=await client.auth.signInWithOtp({email,options:{shouldCreateUser:true,emailRedirectTo:"https://mabdelstar466-dotcom.github.io/profitos-egypt/workspace.html"}});
+  if(error)throw error;
+  setCloudStatus("تم إرسال الطلب","good");
+  authMessage("تم قبول طلب إرسال رابط الدخول إلى "+email+". افحص الوارد وSpam / Junk. إذا لم يصل خلال دقيقتين، أرسل لي صورة الرسالة التي تظهر هنا.","good");
+ }catch(e){
+  setCloudStatus("تعذر الإرسال","bad");
+  authMessage("سبب عدم الإرسال: "+(e?.message||String(e)),"bad");
+ }finally{btn.disabled=false;btn.textContent=original;}
 }
 async function signUp(){
  const email=$("authEmail").value.trim(),password=$("authPassword").value;
  if(!email||password.length<8){authMessage("اكتب بريدًا إلكترونيًا صحيحًا وكلمة مرور من 8 أحرف على الأقل.","bad");return;}
- setCloudStatus("جاري إنشاء الحساب","wait");const {data,error}=await sb.auth.signUp({email,password});
- if(error){setCloudStatus("تعذر التسجيل","bad");authMessage(error.message,"bad");return;}
- if(data.session){await applySession(data.session);}else{setCloudStatus("تحقق من بريدك","wait");authMessage("تم إرسال رسالة تأكيد إلى بريدك. افتحها واضغط رابط التأكيد، ثم ارجع وسجّل الدخول.","good");}
+ try{setCloudStatus("جاري إنشاء الحساب","wait");const client=await ensureSupabaseClient();const {data,error}=await client.auth.signUp({email,password});if(error)throw error;
+  if(data.session){await applySession(data.session);}else{setCloudStatus("تحقق من بريدك","wait");authMessage("تم قبول إنشاء الحساب. افحص الوارد وSpam / Junk لرسالة التأكيد.","good");}
+ }catch(e){setCloudStatus("تعذر التسجيل","bad");authMessage("سبب تعذر التسجيل: "+(e?.message||String(e)),"bad");}
 }
 async function signIn(){
  const email=$("authEmail").value.trim(),password=$("authPassword").value;
  if(!email||!password){authMessage("اكتب البريد الإلكتروني وكلمة المرور أولًا.","bad");return;}
- setCloudStatus("جاري تسجيل الدخول","wait");const {data,error}=await sb.auth.signInWithPassword({email,password});
- if(error){setCloudStatus("تعذر الدخول","bad");authMessage(error.message,"bad");return;}await applySession(data.session);
+ try{setCloudStatus("جاري تسجيل الدخول","wait");const client=await ensureSupabaseClient();const {data,error}=await client.auth.signInWithPassword({email,password});if(error)throw error;await applySession(data.session);}
+ catch(e){setCloudStatus("تعذر الدخول","bad");authMessage("سبب تعذر الدخول: "+(e?.message||String(e)),"bad");}
 }
-async function signOut(){const {error}=await sb.auth.signOut();if(error){authMessage(error.message,"bad");return;}currentUser=null;workspaceId=null;workspaceTitle="";$("authLoggedOut").classList.remove("hidden");$("authLoggedIn").classList.add("hidden");setCloudStatus("غير مسجل");authMessage("تم تسجيل الخروج. النسخة المحلية ما زالت محفوظة على هذا الجهاز.");}
+async function signOut(){try{const client=await ensureSupabaseClient();const {error}=await client.auth.signOut();if(error)throw error;currentUser=null;workspaceId=null;workspaceTitle="";$("authLoggedOut").classList.remove("hidden");$("authLoggedIn").classList.add("hidden");setCloudStatus("غير مسجل");authMessage("تم تسجيل الخروج. النسخة المحلية ما زالت محفوظة على هذا الجهاز.");}catch(e){authMessage(e?.message||String(e),"bad");}}
 
 const money=n=>new Intl.NumberFormat("ar-EG",{maximumFractionDigits:0}).format(Number(n)||0)+" ج";
 const num=v=>{if(v===null||v===undefined||v==="")return 0;const n=Number(String(v).replace(/[,٬]/g,"").replace(/[^\d.-]/g,""));return Number.isFinite(n)?n:0};
@@ -202,6 +220,5 @@ $("magicLinkBtn").addEventListener("click",sendMagicLink);
 $("signupBtn").addEventListener("click",signUp);
 $("loginBtn").addEventListener("click",signIn);
 $("logoutBtn").addEventListener("click",signOut);
-sb.auth.onAuthStateChange((event,session)=>{setTimeout(()=>applySession(session),0)});
-sb.auth.getSession().then(({data})=>applySession(data.session));
+(async()=>{try{const client=await ensureSupabaseClient();client.auth.onAuthStateChange((event,session)=>{setTimeout(()=>applySession(session),0)});const {data,error}=await client.auth.getSession();if(error)throw error;await applySession(data.session);}catch(e){setCloudStatus("تعذر الاتصال","bad");authMessage("خدمة الحسابات غير جاهزة: "+(e?.message||String(e)),"bad");}})();
 </script></body></html>
