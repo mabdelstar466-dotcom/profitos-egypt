@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PAGES = [
     ROOT / "index.html",
     ROOT / "glowsignal-demo.html",
+    ROOT / "workspace.html",
     ROOT / "profitos.html",
     ROOT / "privacy.html",
     ROOT / "terms.html",
@@ -51,6 +52,13 @@ for page in PAGES:
             errors.append(f"{page.name}: link outside repository {link}")
         elif not target.is_file() and not (target.is_dir() and (target / "index.html").is_file()):
             errors.append(f"{page.name}: missing local link {link}")
+    if page.name == "workspace.html":
+        required = {"campaignFile", "leadFile", "campaignTemplate", "leadTemplate", "exportBtn", "clearBtn"}
+        if required - parser.ids:
+            errors.append(f"GlowSignal workspace missing controls: {sorted(required - parser.ids)}")
+        source = page.read_text(encoding="utf-8")
+        if "localStorage" not in source or "function aggregate()" not in source:
+            errors.append("GlowSignal workspace missing local persistence or aggregation logic")
     if page.name == "profitos.html":
         needed = {"price","cost","pack","ship","fees","spend","orders","delivered","returns","fixed","net","cpa","perorder","deliveryrate","margin","breakeven"}
         if needed - parser.ids:
@@ -68,4 +76,4 @@ if errors:
     print("\n".join(" - " + e for e in errors))
     raise SystemExit(1)
 
-print(f"PASS: checked {len(PAGES)} HTML pages, local links, ProfitOS calculator IDs, SEO files, paid-file exclusion")
+print(f"PASS: checked {len(PAGES)} HTML pages, local links, GlowSignal workspace controls, ProfitOS calculator IDs, SEO files, paid-file exclusion")
