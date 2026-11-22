@@ -90,6 +90,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const KEY="glowsignal_mvp_v02";
+const localKey=()=>currentUser?.id?`${KEY}:${currentUser.id}`:KEY;
 const $=id=>document.getElementById(id);
 let state={campaigns:[],leads:[]};
 
@@ -116,22 +117,23 @@ async function loadCloudData(){
   const ordersByLead=new Map();(o.data||[]).forEach(x=>{const k=x.lead_ref||"";if(!ordersByLead.has(k))ordersByLead.set(k,[]);ordersByLead.get(k).push(x)});
   state.campaigns=(c.data||[]).map(x=>({date:x.report_date||"",name:x.campaign_name,spend:Number(x.spend)||0,impressions:Number(x.impressions)||0,clicks:Number(x.clicks)||0,messages:Number(x.messages)||0}));
   state.leads=(l.data||[]).flatMap(x=>{const base={id:x.lead_ref,date:x.created_at||"",campaign:x.campaign_name,status:x.lead_status||"new",objection:x.objection||"",agent:x.agent_label||"غير محدد",response:Number(x.first_response_minutes)||0};const related=ordersByLead.get(x.lead_ref)||[];return related.length?related.map(z=>({...base,orderId:z.order_ref,orderStatus:z.order_status||"",orderValue:Number(z.order_value)||0,productCost:Number(z.product_cost)||0,shipping:Number(z.shipping_cost)||0,returnCost:Number(z.return_cost)||0,fees:Number(z.payment_fees)||0})):[{...base,orderId:"",orderStatus:"",orderValue:0,productCost:0,shipping:0,returnCost:0,fees:0}]});
-  localStorage.setItem(KEY,JSON.stringify(state));render();
- }else{const local=JSON.parse(localStorage.getItem(KEY)||"null");if(local&&(local.campaigns?.length||local.leads?.length)){state=local;await syncToCloud();}}
+  localStorage.setItem(localKey(),JSON.stringify(state));render();
+ }else{const local=JSON.parse(localStorage.getItem(localKey())||"null");if(local&&(local.campaigns?.length||local.leads?.length)){state=local;await syncToCloud();}else{state={campaigns:[],leads:[]};render();}}
  setCloudStatus("متصل ومتزامن","good");$("storageNotice").innerHTML="<b>المزامنة السحابية مفعّلة:</b> بيانات مساحة العمل محفوظة في Supabase، ويمكنك الوصول إليها بعد تسجيل الدخول من جهاز آخر.";
 }
 async function syncToCloud(){
- if(!currentUser||!workspaceId)return;setCloudStatus("جاري الحفظ...","wait");
- const campaigns=state.campaigns.map(x=>({workspace_id:workspaceId,report_date:cleanDate(x.date),campaign_name:x.name,spend:x.spend,impressions:x.impressions,clicks:x.clicks,messages:x.messages}));
+ if(!currentUser||!workspaceId)return;
+ setCloudStatus("جاري الحفظ...","wait");
+ const campaigns=state.campaigns.map(x=>({report_date:cleanDate(x.date),campaign_name:x.name,spend:x.spend,impressions:x.impressions,clicks:x.clicks,messages:x.messages}));
  const uniqueLeads=uniqueBy(state.leads.filter(x=>x.id),"id");
- const leads=uniqueLeads.map(x=>({workspace_id:workspaceId,lead_ref:x.id,created_at:x.date||null,campaign_name:x.campaign,lead_status:x.status,objection:x.objection||null,agent_label:x.agent||null,first_response_minutes:x.response||0}));
+ const leads=uniqueLeads.map(x=>({lead_ref:x.id,created_at:x.date||null,campaign_name:x.campaign,lead_status:x.status,objection:x.objection||null,agent_label:x.agent||null,first_response_minutes:x.response||0}));
  const uniqueOrders=uniqueBy(state.leads.filter(x=>x.orderId),"orderId");
- const orders=uniqueOrders.map(x=>({workspace_id:workspaceId,order_ref:x.orderId,lead_ref:x.id||null,campaign_name:x.campaign,order_status:x.orderStatus||"pending",order_value:x.orderValue||0,product_cost:x.productCost||0,shipping_cost:x.shipping||0,return_cost:x.returnCost||0,payment_fees:x.fees||0}));
- for(const table of ["campaign_daily","lead_records","orders"]){const d=await sb.from(table).delete().eq("workspace_id",workspaceId);if(d.error)throw d.error;}
- for(let i=0;i<campaigns.length;i+=500){const q=await sb.from("campaign_daily").insert(campaigns.slice(i,i+500));if(q.error)throw q.error;}
- for(let i=0;i<leads.length;i+=500){const q=await sb.from("lead_records").insert(leads.slice(i,i+500));if(q.error)throw q.error;}
- for(let i=0;i<orders.length;i+=500){const q=await sb.from("orders").insert(orders.slice(i,i+500));if(q.error)throw q.error;}
- localStorage.setItem(KEY,JSON.stringify(state));setCloudStatus("متصل ومتزامن","good");$("storageNotice").innerHTML="<b>تم الحفظ سحابيًا:</b> بيانات مساحة العمل محفوظة في Supabase وموجودة أيضًا على هذا الجهاز.";
+ const orders=uniqueOrders.map(x=>({order_ref:x.orderId,lead_ref:x.id||null,campaign_name:x.campaign,order_status:x.orderStatus||"pending",order_value:x.orderValue||0,product_cost:x.productCost||0,shipping_cost:x.shipping||0,return_cost:x.returnCost||0,payment_fees:x.fees||0}));
+ const {error}=await sb.rpc("replace_workspace_data",{target_workspace:workspaceId,campaigns_payload:campaigns,leads_payload:leads,orders_payload:orders});
+ if(error)throw error;
+ localStorage.setItem(localKey(),JSON.stringify(state));
+ setCloudStatus("متصل ومتزامن","good");
+ $("storageNotice").innerHTML="<b>تم الحفظ سحابيًا:</b> بيانات مساحة العمل محفوظة في Supabase وموجودة أيضًا على هذا الجهاز.";
 }
 function queueCloudSync(){if(!currentUser||!workspaceId)return;cloudQueue=cloudQueue.then(()=>syncToCloud()).catch(e=>{setCloudStatus("تعذر الحفظ","bad");authMessage("تعذر حفظ البيانات سحابيًا: "+(e.message||"تحقق من إعداد قاعدة البيانات وسياسات RLS."),"bad");});}
 async function applySession(session){
@@ -164,7 +166,7 @@ const num=v=>{if(v===null||v===undefined||v==="")return 0;const n=Number(String(
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const norm=s=>String(s??"").trim().toLowerCase().replace(/\s+/g," ");
 function flash(msg,type="good"){const el=$("flash");el.className="notice "+type;el.textContent=msg;setTimeout(()=>el.classList.add("hidden"),6000)}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(state));if(currentUser&&workspaceId){queueCloudSync()}else{$("storageNotice").innerHTML="<b>تم الحفظ على هذا الجهاز:</b> سجّل الدخول لتفعيل المزامنة السحابية.";}}catch(e){flash("تعذر الحفظ المحلي. قد تكون مساحة المتصفح ممتلئة.","bad")}}
+function save(){try{localStorage.setItem(localKey(),JSON.stringify(state));if(currentUser&&workspaceId){queueCloudSync()}else{$("storageNotice").innerHTML="<b>تم الحفظ على هذا الجهاز:</b> سجّل الدخول لتفعيل المزامنة السحابية.";}}catch(e){flash("تعذر الحفظ المحلي. قد تكون مساحة المتصفح ممتلئة.","bad")}}
 function load(){try{const x=JSON.parse(localStorage.getItem(KEY)||"null");if(x&&Array.isArray(x.campaigns)&&Array.isArray(x.leads))state=x}catch(e){}render()}
 function parseCSV(text){text=String(text).replace(/^\uFEFF/,"");const first=text.split(/\r?\n/,1)[0]||"";const candidates=[",",";","\t"];const delim=candidates.sort((a,b)=>first.split(b).length-first.split(a).length)[0];let rows=[],row=[],cell="",quoted=false;for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++}else quoted=!quoted}else if(c===delim&&!quoted){row.push(cell.trim());cell=""}else if((c==="\n"||c==="\r")&&!quoted){if(c==="\r"&&text[i+1]==="\n")i++;row.push(cell.trim());if(row.some(v=>v!==""))rows.push(row);row=[];cell=""}else cell+=c}row.push(cell.trim());if(row.some(v=>v!==""))rows.push(row);if(rows.length<2)throw Error("الملف فارغ أو لا يحتوي على صفوف بيانات.");const headers=rows.shift().map(h=>norm(h));return rows.map(r=>Object.fromEntries(headers.map((h,i)=>[h,r[i]??""])) )}
 function val(o,...keys){for(const k of keys){if(o[k]!==undefined)return o[k]}return ""}
@@ -183,7 +185,7 @@ function render(){const a=aggregate();$("spend").textContent=money(a.spend);$("l
 async function importFile(file,type){if(!file)return;try{const rows=parseCSV(await file.text());if(type==="campaigns"){const parsed=rows.map(normalizeCampaign).filter(x=>x.name);if(!parsed.length||!parsed.some(x=>x.spend>=0))throw Error("لم أجد campaign_name و spend. استخدم نموذج الحملات.");state.campaigns=parsed;$("campaignStatus").textContent="تم استيراد "+parsed.length+" حملة"}else{const parsed=rows.map(normalizeLead).filter(x=>x.id);if(!parsed.length)throw Error("لم أجد lead_id. استخدم نموذج العملاء.");state.leads=parsed;$("leadStatus").textContent="تم استيراد "+parsed.length+" صف"}save();render();flash("تم استيراد "+(type==="campaigns"?"ملف الحملات":"ملف العملاء والطلبات")+" بنجاح. راجع الأرقام قبل اتخاذ قرار.");}catch(e){flash(e.message||"تعذر قراءة الملف.","bad")}}
 function loadSample(){state.campaigns=[{date:"2026-11-01",name:"Hair Repair Campaign",spend:12000,impressions:85000,clicks:2100,messages:340},{date:"2026-11-01",name:"Anti Frizz Campaign",spend:8500,impressions:62000,clicks:1450,messages:270}];state.leads=[{id:"L001",campaign:"Hair Repair Campaign",status:"qualified",objection:"السعر",agent:"Agent A",response:3,orderId:"O001",orderStatus:"delivered",orderValue:1200,productCost:420,shipping:55,returnCost:0,fees:18},{id:"L002",campaign:"Hair Repair Campaign",status:"replied",objection:"الثقة",agent:"Agent B",response:8,orderId:"O002",orderStatus:"returned",orderValue:0,productCost:0,shipping:60,returnCost:60,fees:0},{id:"L003",campaign:"Anti Frizz Campaign",status:"converted",objection:"",agent:"Agent A",response:2,orderId:"O003",orderStatus:"delivered",orderValue:950,productCost:310,shipping:50,returnCost:0,fees:14},{id:"L004",campaign:"Anti Frizz Campaign",status:"not_interested",objection:"السعر",agent:"Agent B",response:12,orderId:"",orderStatus:"",orderValue:0,productCost:0,shipping:0,returnCost:0,fees:0}];save();render();flash("تم تحميل بيانات تجريبية. استبدلها بملفاتك قبل الاعتماد على النتائج.") }
 function exportSummary(){const a=aggregate();const rows=[["metric","value"],["ad_spend_egp",a.spend],["unique_leads",a.leads.length],["qualified_leads",a.qualified.length],["delivered_orders",a.delivered.length],["delivered_revenue_egp",a.revenue],["delivered_product_cost_egp",a.cogs],["shipping_cost_egp",a.shipping],["return_cost_egp",a.returns],["payment_fees_egp",a.fees],["estimated_contribution_egp",a.profit]];download("glowsignal-summary.csv",rows.map(r=>r.join(",")).join("\n"))}
-document.querySelectorAll("[data-tab]").forEach(a=>a.addEventListener("click",()=>{document.querySelectorAll("[data-tab]").forEach(x=>x.classList.toggle("active",x===a));document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x.id===a.dataset.tab))}));$("campaignFile").addEventListener("change",e=>importFile(e.target.files[0],"campaigns"));$("leadFile").addEventListener("change",e=>importFile(e.target.files[0],"leads"));$("campaignTemplate").onclick=templateCampaign;$("leadTemplate").onclick=templateLeads;$("sampleBtn").onclick=loadSample;$("exportBtn").onclick=exportSummary;$("clearBtn").onclick=()=>{if(confirm("تمسح كل البيانات المحفوظة في هذا المتصفح؟")){state={campaigns:[],leads:[]};localStorage.removeItem(KEY);if(currentUser&&workspaceId)queueCloudSync();$("campaignStatus").textContent="لم يتم الاستيراد";$("leadStatus").textContent="لم يتم الاستيراد";render();flash("تم مسح البيانات من هذا المتصفح.")}};load();
+document.querySelectorAll("[data-tab]").forEach(a=>a.addEventListener("click",()=>{document.querySelectorAll("[data-tab]").forEach(x=>x.classList.toggle("active",x===a));document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x.id===a.dataset.tab))}));$("campaignFile").addEventListener("change",e=>importFile(e.target.files[0],"campaigns"));$("leadFile").addEventListener("change",e=>importFile(e.target.files[0],"leads"));$("campaignTemplate").onclick=templateCampaign;$("leadTemplate").onclick=templateLeads;$("sampleBtn").onclick=loadSample;$("exportBtn").onclick=exportSummary;$("clearBtn").onclick=()=>{if(confirm("تمسح كل البيانات المحفوظة في هذا المتصفح؟")){state={campaigns:[],leads:[]};localStorage.removeItem(localKey());if(currentUser&&workspaceId)queueCloudSync();$("campaignStatus").textContent="لم يتم الاستيراد";$("leadStatus").textContent="لم يتم الاستيراد";render();flash("تم مسح البيانات من هذا المتصفح.")}};load();
 $("signupBtn").addEventListener("click",signUp);
 $("loginBtn").addEventListener("click",signIn);
 $("logoutBtn").addEventListener("click",signOut);
