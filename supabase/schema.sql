@@ -144,3 +144,14 @@ create policy "members can delete orders" on public.orders
 for delete to authenticated using (public.is_workspace_member(workspace_id));
 
 -- Future billing tables must be writable only by trusted server-side functions/webhooks.
+
+
+-- The project was created without automatic Data API grants for new tables.
+-- Allow authenticated users to reach these tables through Supabase Data API;
+-- Row Level Security policies above still control which rows they can access.
+grant usage on schema public to authenticated;
+grant select, update, delete on public.workspaces to authenticated;
+grant select on public.workspace_members to authenticated;
+grant select, insert, update, delete on public.campaign_daily to authenticated;
+grant select, insert, update, delete on public.lead_records to authenticated;
+grant select, insert, update, delete on public.orders to authenticated;
