@@ -29,8 +29,8 @@
 <section class="card authbox" id="authCard">
 <div class="cardhead"><h2>حساب GlowSignal والمزامنة السحابية</h2><span class="tag cloudpill" id="cloudStatus">غير متصل</span></div>
 <div id="authLoggedOut"><p class="hint">أنشئ حسابًا أو سجّل الدخول لحفظ بيانات متجرك على السحابة والوصول إليها من أي جهاز.</p>
-<div class="authgrid"><input id="authEmail" type="email" autocomplete="email" placeholder="البريد الإلكتروني"><input id="authPassword" type="password" autocomplete="current-password" placeholder="كلمة المرور (8 أحرف على الأقل)"><input id="workspaceName" type="text" placeholder="اسم مساحة العمل (مثلاً: متجري)"></div>
-<div class="authactions"><button class="btn" id="signupBtn">إنشاء حساب جديد</button><button class="btn secondary" id="loginBtn">تسجيل الدخول</button></div></div>
+<div class="authgrid"><input id="authEmail" type="email" autocomplete="email" value="mabdelstar466@gmail.com" placeholder="البريد الإلكتروني"><input id="authPassword" type="password" autocomplete="current-password" placeholder="كلمة المرور (8 أحرف على الأقل)"><input id="workspaceName" type="text" placeholder="اسم مساحة العمل (مثلاً: متجري)"></div>
+<div class="authactions"><button class="btn" id="magicLinkBtn">إرسال رابط الدخول إلى بريدي</button><button class="btn secondary" id="signupBtn">إنشاء بكلمة مرور</button><button class="btn secondary" id="loginBtn">تسجيل الدخول</button></div></div>
 <div id="authLoggedIn" class="hidden"><div class="row"><b id="signedInEmail"></b><span class="tag" id="workspaceLabel">مساحة العمل</span><button class="btn secondary" id="logoutBtn">تسجيل الخروج</button></div></div>
 <div class="authfeedback" id="authFeedback">بيانات CSV لا تُرفع قبل تسجيل الدخول. استخدم معرّفات مجهولة ولا ترفع أسماء أو أرقام هواتف العملاء.</div></section>
 <div class="notice info" id="storageNotice"><b>نسخة MVP:</b> ارفع ملفات CSV للحملات والعملاء والطلبات. يمكنك تجربة التحليل محليًا، أو إنشاء حساب لتفعيل حفظ البيانات سحابيًا ومزامنتها بين أجهزتك. لا ترفع أسماء أو أرقام هواتف أو عناوين العملاء.</div>
@@ -146,6 +146,18 @@ async function applySession(session){
  try{await ensureWorkspace();await loadCloudData();authMessage("تم تسجيل الدخول. بياناتك مرتبطة بمساحة عملك الخاصة.","good");}
  catch(e){setCloudStatus("إعداد غير مكتمل","bad");authMessage("تم تسجيل الدخول، لكن قاعدة البيانات لم تكتمل: "+(e.message||"تحقق من تشغيل ملف supabase/schema.sql في SQL Editor."),"bad");}
 }
+async function sendMagicLink(){
+ const email=$("authEmail").value.trim();
+ if(!email){authMessage("اكتب بريدك الإلكتروني أولًا.","bad");return;}
+ setCloudStatus("جاري إرسال رابط الدخول","wait");
+ const {error}=await sb.auth.signInWithOtp({
+  email,
+  options:{shouldCreateUser:true,emailRedirectTo:"https://mabdelstar466-dotcom.github.io/profitos-egypt/workspace.html"}
+ });
+ if(error){setCloudStatus("تعذر الإرسال","bad");authMessage("لم يتم إرسال الرابط: "+error.message+" — قد يحتاج رابط الموقع إلى إضافته في Supabase Authentication → URL Configuration.","bad");return;}
+ setCloudStatus("تم إرسال الرابط","good");
+ authMessage("تم طلب إرسال رابط تسجيل الدخول إلى "+email+". افتح بريدك واضغط رابط الدخول. إذا لم تجده، راجع Spam / Junk.","good");
+}
 async function signUp(){
  const email=$("authEmail").value.trim(),password=$("authPassword").value;
  if(!email||password.length<8){authMessage("اكتب بريدًا إلكترونيًا صحيحًا وكلمة مرور من 8 أحرف على الأقل.","bad");return;}
@@ -186,6 +198,7 @@ async function importFile(file,type){if(!file)return;try{const rows=parseCSV(awa
 function loadSample(){state.campaigns=[{date:"2026-11-01",name:"Hair Repair Campaign",spend:12000,impressions:85000,clicks:2100,messages:340},{date:"2026-11-01",name:"Anti Frizz Campaign",spend:8500,impressions:62000,clicks:1450,messages:270}];state.leads=[{id:"L001",campaign:"Hair Repair Campaign",status:"qualified",objection:"السعر",agent:"Agent A",response:3,orderId:"O001",orderStatus:"delivered",orderValue:1200,productCost:420,shipping:55,returnCost:0,fees:18},{id:"L002",campaign:"Hair Repair Campaign",status:"replied",objection:"الثقة",agent:"Agent B",response:8,orderId:"O002",orderStatus:"returned",orderValue:0,productCost:0,shipping:60,returnCost:60,fees:0},{id:"L003",campaign:"Anti Frizz Campaign",status:"converted",objection:"",agent:"Agent A",response:2,orderId:"O003",orderStatus:"delivered",orderValue:950,productCost:310,shipping:50,returnCost:0,fees:14},{id:"L004",campaign:"Anti Frizz Campaign",status:"not_interested",objection:"السعر",agent:"Agent B",response:12,orderId:"",orderStatus:"",orderValue:0,productCost:0,shipping:0,returnCost:0,fees:0}];save();render();flash("تم تحميل بيانات تجريبية. استبدلها بملفاتك قبل الاعتماد على النتائج.") }
 function exportSummary(){const a=aggregate();const rows=[["metric","value"],["ad_spend_egp",a.spend],["unique_leads",a.leads.length],["qualified_leads",a.qualified.length],["delivered_orders",a.delivered.length],["delivered_revenue_egp",a.revenue],["delivered_product_cost_egp",a.cogs],["shipping_cost_egp",a.shipping],["return_cost_egp",a.returns],["payment_fees_egp",a.fees],["estimated_contribution_egp",a.profit]];download("glowsignal-summary.csv",rows.map(r=>r.join(",")).join("\n"))}
 document.querySelectorAll("[data-tab]").forEach(a=>a.addEventListener("click",()=>{document.querySelectorAll("[data-tab]").forEach(x=>x.classList.toggle("active",x===a));document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x.id===a.dataset.tab))}));$("campaignFile").addEventListener("change",e=>importFile(e.target.files[0],"campaigns"));$("leadFile").addEventListener("change",e=>importFile(e.target.files[0],"leads"));$("campaignTemplate").onclick=templateCampaign;$("leadTemplate").onclick=templateLeads;$("sampleBtn").onclick=loadSample;$("exportBtn").onclick=exportSummary;$("clearBtn").onclick=()=>{if(confirm("تمسح كل البيانات المحفوظة في هذا المتصفح؟")){state={campaigns:[],leads:[]};localStorage.removeItem(localKey());if(currentUser&&workspaceId)queueCloudSync();$("campaignStatus").textContent="لم يتم الاستيراد";$("leadStatus").textContent="لم يتم الاستيراد";render();flash("تم مسح البيانات من هذا المتصفح.")}};load();
+$("magicLinkBtn").addEventListener("click",sendMagicLink);
 $("signupBtn").addEventListener("click",signUp);
 $("loginBtn").addEventListener("click",signIn);
 $("logoutBtn").addEventListener("click",signOut);
