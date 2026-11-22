@@ -1,4 +1,5 @@
 -- GlowSignal hosted SaaS schema (Supabase Postgres)
+-- Safe to re-run: policies and functions are recreated idempotently.
 -- Apply only after creating a Supabase project. Never expose the service_role key.
 -- Store pseudonymous lead/order references only; do not store customer names or phone numbers.
 
@@ -106,40 +107,56 @@ revoke all on function public.create_workspace(text) from public;
 grant execute on function public.is_workspace_member(uuid) to authenticated;
 grant execute on function public.create_workspace(text) to authenticated;
 
+drop policy if exists "members can read workspaces" on public.workspaces;
 create policy "members can read workspaces" on public.workspaces
 for select to authenticated using (public.is_workspace_member(id));
+drop policy if exists "owners can update workspaces" on public.workspaces;
 create policy "owners can update workspaces" on public.workspaces
 for update to authenticated using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+drop policy if exists "owners can delete workspaces" on public.workspaces;
 create policy "owners can delete workspaces" on public.workspaces
 for delete to authenticated using (owner_id = auth.uid());
 
+drop policy if exists "members can read own memberships" on public.workspace_members;
 create policy "members can read own memberships" on public.workspace_members
 for select to authenticated using (user_id = auth.uid());
 
+drop policy if exists "members can read campaigns" on public.campaign_daily;
 create policy "members can read campaigns" on public.campaign_daily
 for select to authenticated using (public.is_workspace_member(workspace_id));
+drop policy if exists "members can add campaigns" on public.campaign_daily;
 create policy "members can add campaigns" on public.campaign_daily
 for insert to authenticated with check (public.is_workspace_member(workspace_id));
+drop policy if exists "members can update campaigns" on public.campaign_daily;
 create policy "members can update campaigns" on public.campaign_daily
 for update to authenticated using (public.is_workspace_member(workspace_id)) with check (public.is_workspace_member(workspace_id));
+drop policy if exists "members can delete campaigns" on public.campaign_daily;
 create policy "members can delete campaigns" on public.campaign_daily
 for delete to authenticated using (public.is_workspace_member(workspace_id));
 
+drop policy if exists "members can read leads" on public.lead_records;
 create policy "members can read leads" on public.lead_records
 for select to authenticated using (public.is_workspace_member(workspace_id));
+drop policy if exists "members can add leads" on public.lead_records;
 create policy "members can add leads" on public.lead_records
 for insert to authenticated with check (public.is_workspace_member(workspace_id));
+drop policy if exists "members can update leads" on public.lead_records;
 create policy "members can update leads" on public.lead_records
 for update to authenticated using (public.is_workspace_member(workspace_id)) with check (public.is_workspace_member(workspace_id));
+drop policy if exists "members can delete leads" on public.lead_records;
 create policy "members can delete leads" on public.lead_records
 for delete to authenticated using (public.is_workspace_member(workspace_id));
 
+drop policy if exists "members can read orders" on public.orders;
 create policy "members can read orders" on public.orders
 for select to authenticated using (public.is_workspace_member(workspace_id));
+drop policy if exists "members can add orders" on public.orders;
 create policy "members can add orders" on public.orders
 for insert to authenticated with check (public.is_workspace_member(workspace_id));
+drop policy if exists "members can update orders" on public.orders;
 create policy "members can update orders" on public.orders
 for update to authenticated using (public.is_workspace_member(workspace_id)) with check (public.is_workspace_member(workspace_id));
+drop policy if exists "members can delete orders" on public.orders;
 create policy "members can delete orders" on public.orders
 for delete to authenticated using (public.is_workspace_member(workspace_id));
 
@@ -155,3 +172,70 @@ grant select on public.workspace_members to authenticated;
 grant select, insert, update, delete on public.campaign_daily to authenticated;
 grant select, insert, update, delete on public.lead_records to authenticated;
 grant select, insert, update, delete on public.orders to authenticated;
+
+
+-- Replace a workspace snapshot atomically. This avoids client-side delete/insert gaps.
+create or replace function public.replace_workspace_data(
+  target_workspace uuid,
+  campaigns_payload jsonb,
+  leads_payload jsonb,
+  orders_payload jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null or not public.is_workspace_member(target_workspace) then
+    raise exception 'Workspace access denied';
+  end if;
+  if jsonb_typeof(coalesce(campaigns_payload, '[]'::jsonb)) <> 'array'
+     or jsonb_typeof(coalesce(leads_payload, '[]'::jsonb)) <> 'array'
+     or jsonb_typeof(coalesce(orders_payload, '[]'::jsonb)) <> 'array' then
+    raise exception 'Workspace data must be JSON arrays';
+  end if;
+
+  delete from public.orders where workspace_id = target_workspace;
+  delete from public.lead_records where workspace_id = target_workspace;
+  delete from public.campaign_daily where workspace_id = target_workspace;
+
+  insert into public.campaign_daily
+    (workspace_id, report_date, campaign_name, spend, impressions, clicks, messages)
+  select target_workspace, x.report_date, x.campaign_name,
+         coalesce(x.spend, 0), coalesce(x.impressions, 0),
+         coalesce(x.clicks, 0), coalesce(x.messages, 0)
+  from jsonb_to_recordset(coalesce(campaigns_payload, '[]'::jsonb)) as x(
+    report_date date, campaign_name text, spend numeric,
+    impressions bigint, clicks bigint, messages bigint
+  );
+
+  insert into public.lead_records
+    (workspace_id, lead_ref, created_at, campaign_name, lead_status,
+     objection, agent_label, first_response_minutes)
+  select target_workspace, x.lead_ref, x.created_at, x.campaign_name,
+         coalesce(x.lead_status, 'new'), x.objection, x.agent_label,
+         coalesce(x.first_response_minutes, 0)
+  from jsonb_to_recordset(coalesce(leads_payload, '[]'::jsonb)) as x(
+    lead_ref text, created_at timestamptz, campaign_name text,
+    lead_status text, objection text, agent_label text,
+    first_response_minutes numeric
+  );
+
+  insert into public.orders
+    (workspace_id, order_ref, lead_ref, campaign_name, order_status,
+     order_value, product_cost, shipping_cost, return_cost, payment_fees)
+  select target_workspace, x.order_ref, x.lead_ref, x.campaign_name,
+         coalesce(x.order_status, 'pending'), coalesce(x.order_value, 0),
+         coalesce(x.product_cost, 0), coalesce(x.shipping_cost, 0),
+         coalesce(x.return_cost, 0), coalesce(x.payment_fees, 0)
+  from jsonb_to_recordset(coalesce(orders_payload, '[]'::jsonb)) as x(
+    order_ref text, lead_ref text, campaign_name text, order_status text,
+    order_value numeric, product_cost numeric, shipping_cost numeric,
+    return_cost numeric, payment_fees numeric
+  );
+end;
+$$;
+
+revoke all on function public.replace_workspace_data(uuid, jsonb, jsonb, jsonb) from public;
+grant execute on function public.replace_workspace_data(uuid, jsonb, jsonb, jsonb) to authenticated;
