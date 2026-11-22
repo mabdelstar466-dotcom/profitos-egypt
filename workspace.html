@@ -33,7 +33,7 @@
 <div class="authactions"><button class="btn" id="signupBtn">إنشاء حساب جديد</button><button class="btn secondary" id="loginBtn">تسجيل الدخول</button></div></div>
 <div id="authLoggedIn" class="hidden"><div class="row"><b id="signedInEmail"></b><span class="tag" id="workspaceLabel">مساحة العمل</span><button class="btn secondary" id="logoutBtn">تسجيل الخروج</button></div></div>
 <div class="authfeedback" id="authFeedback">بيانات CSV لا تُرفع قبل تسجيل الدخول. استخدم معرّفات مجهولة ولا ترفع أسماء أو أرقام هواتف العملاء.</div></section>
-<div class="notice info" id="storageNotice"><b>نسخة MVP تعمل فعليًا:</b> ارفع ملفات CSV الخاصة بالحملات والعملاء والطلبات لتحليل بياناتك. تتم المعالجة والحفظ داخل متصفحك فقط؛ لا ترفع أسماء أو أرقام هواتف أو أي بيانات شخصية للعملاء. هذه النسخة لا تحتوي بعد على حسابات مستخدمين أو مزامنة بين الأجهزة أو اشتراكات.</div>
+<div class="notice info" id="storageNotice"><b>نسخة MVP:</b> ارفع ملفات CSV للحملات والعملاء والطلبات. يمكنك تجربة التحليل محليًا، أو إنشاء حساب لتفعيل حفظ البيانات سحابيًا ومزامنتها بين أجهزتك. لا ترفع أسماء أو أرقام هواتف أو عناوين العملاء.</div>
 <div id="flash" class="notice hidden"></div>
 <section id="dashboard" class="view active">
 <div class="grid kpis">
@@ -66,7 +66,7 @@
 <div class="card"><div class="cardhead"><h2>مؤشرات فريق المبيعات</h2><span class="tag">حسب اسم المسؤول في CSV</span></div><div class="tablewrap"><table><thead><tr><th>المسؤول</th><th>العملاء</th><th>متوسط أول رد (دقيقة)</th><th>معدل التأهيل</th><th>طلبات مُسلّمة</th></tr></thead><tbody id="teamRows"><tr><td colspan="5" class="empty">استورد بيانات العملاء.</td></tr></tbody></table></div><p class="footnote">هذه مؤشرات تشغيلية وليست تقييمًا كاملًا للموظف؛ يجب مراعاة نوعية العملاء وتوزيع المحادثات وساعات العمل.</p></div>
 </section>
 <section id="data" class="view">
-<div class="notice info"><b>طريقة الاستخدام:</b> نزّل النموذجين أدناه، عبّئهما أو صدّر تقاريرك من أدواتك إلى CSV بنفس أسماء الأعمدة، ثم ارفع الملفين. لا ترفع بيانات شخصية للعملاء. كل استيراد يستبدل بيانات النوع نفسه المحفوظة في هذا المتصفح.</div>
+<div class="notice info"><b>طريقة الاستخدام:</b> نزّل النموذجين أدناه، عبّئهما أو صدّر تقاريرك من أدواتك إلى CSV بنفس أسماء الأعمدة، ثم ارفع الملفين. لا ترفع بيانات شخصية للعملاء. كل استيراد يستبدل بيانات النوع نفسه داخل مساحة عملك؛ عند تسجيل الدخول تُزامَن البيانات مع السحابة.</div>
 <div class="grid importgrid">
 <div class="drop"><h3>1. ملف الحملات الإعلانية</h3><p>يحتوي على اسم الحملة والإنفاق، ويمكن إضافة مرات الظهور والنقرات والمحادثات.</p><div class="row"><button class="btn secondary" id="campaignTemplate">تحميل نموذج الحملات CSV</button><span class="status" id="campaignStatus">لم يتم الاستيراد</span></div><input type="file" id="campaignFile" accept=".csv,text/csv"></div>
 <div class="drop"><h3>2. ملف العملاء والطلبات</h3><p>صف واحد لكل عميل/طلب. استخدم معرّفات داخلية بدل الاسم ورقم الهاتف.</p><div class="row"><button class="btn secondary" id="leadTemplate">تحميل نموذج العملاء CSV</button><span class="status" id="leadStatus">لم يتم الاستيراد</span></div><input type="file" id="leadFile" accept=".csv,text/csv"></div>
@@ -85,7 +85,7 @@
 <p class="footnote">الحساب التقديري = إيراد الطلبات المسلّمة − تكلفة منتجاتها − الشحن المسجل − تكاليف المرتجعات − رسوم الدفع − الإنفاق الإعلاني. لا يشمل المصاريف العامة أو الضرائب أو الرواتب ما لم تضفها يدويًا في مصدر آخر.</p>
 </div>
 </section>
-<div class="footerbox"><div><b>GlowSignal · MVP 0.2</b><p>تحليل فعلي لملفاتك، دون ربط خارجي في هذه المرحلة.</p></div><a href="./">الموقع الرئيسي</a></div>
+<div class="footerbox"><div><b>GlowSignal · MVP 0.2</b><p>تحليل بيانات متجرك مع حفظ سحابي للحسابات المسجلة.</p></div><a href="./">الموقع الرئيسي</a></div>
 </main></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -96,7 +96,7 @@ let state={campaigns:[],leads:[]};
 const SUPABASE_URL="https://ndhscchkuahwtwpfkqxd.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY="sb_publishable_auHvksUtVlncj2pAoXfXUA_MYAdKVQ6";
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-let currentUser=null,workspaceId=null,workspaceTitle="",cloudQueue=Promise.resolve();
+let currentUser=null,workspaceId=null,workspaceTitle="",cloudQueue=Promise.resolve(),applyingUserId=null;
 function setCloudStatus(label,kind=""){const el=$("cloudStatus");if(el){el.textContent=label;el.className="tag cloudpill "+kind}}
 function authMessage(message,kind=""){const el=$("authFeedback");if(el){el.textContent=message;el.style.color=kind==="bad"?"var(--red)":kind==="good"?"var(--green)":"var(--muted)"}}
 function cleanDate(v){const x=String(v||"").slice(0,10);return /^\d{4}-\d{2}-\d{2}$/.test(x)?x:null}
@@ -135,8 +135,11 @@ async function syncToCloud(){
 }
 function queueCloudSync(){if(!currentUser||!workspaceId)return;cloudQueue=cloudQueue.then(()=>syncToCloud()).catch(e=>{setCloudStatus("تعذر الحفظ","bad");authMessage("تعذر حفظ البيانات سحابيًا: "+(e.message||"تحقق من إعداد قاعدة البيانات وسياسات RLS."),"bad");});}
 async function applySession(session){
- currentUser=session?.user||null;$("authLoggedOut").classList.toggle("hidden",!!currentUser);$("authLoggedIn").classList.toggle("hidden",!currentUser);
- if(!currentUser){workspaceId=null;workspaceTitle="";setCloudStatus("غير مسجل");authMessage("سجّل الدخول لحفظ البيانات على السحابة. يمكنك الاستمرار محليًا دون حساب.");return;}
+ const nextUser=session?.user||null;
+ if(nextUser&&applyingUserId===nextUser.id)return;
+ currentUser=nextUser;$("authLoggedOut").classList.toggle("hidden",!!currentUser);$("authLoggedIn").classList.toggle("hidden",!currentUser);
+ if(!currentUser){applyingUserId=null;workspaceId=null;workspaceTitle="";setCloudStatus("غير مسجل");authMessage("سجّل الدخول لحفظ البيانات على السحابة. يمكنك الاستمرار محليًا دون حساب.");return;}
+ applyingUserId=currentUser.id;
  $("signedInEmail").textContent=currentUser.email||"حسابك";
  try{await ensureWorkspace();await loadCloudData();authMessage("تم تسجيل الدخول. بياناتك مرتبطة بمساحة عملك الخاصة.","good");}
  catch(e){setCloudStatus("إعداد غير مكتمل","bad");authMessage("تم تسجيل الدخول، لكن قاعدة البيانات لم تكتمل: "+(e.message||"تحقق من تشغيل ملف supabase/schema.sql في SQL Editor."),"bad");}
