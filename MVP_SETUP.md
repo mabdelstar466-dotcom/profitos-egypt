@@ -12,7 +12,7 @@
 - Email/password signup, sign-in, magic-link sign-in, and password reset UI through Supabase Auth.
 - Private workspace creation and cloud data replacement through Supabase Postgres RPC.
 - RLS policies and authenticated table grants in supabase/schema.sql.
-- Local browser backup and CSV performance export.
+- Local browser backup, JSON backup/restore, and campaign performance CSV export.
 - Public privacy and terms pages dedicated to GlowSignal.
 
 ## One-time Supabase setup still needs confirmation
@@ -28,7 +28,7 @@ A successful GitHub Pages deployment does not prove that the SQL has been run in
 6. Import sample or anonymized CSV files and confirm the status changes to «متصل ومتزامن».
 
 ## CSV formats
-Campaigns required: campaign_name, spend; optional: date, impressions, clicks, messages.
+Campaigns required: campaign_name (or Campaign name), spend (or Amount spent); optional: date / Reporting starts, impressions, clicks / Link clicks, messages / Messaging conversations started.
 
 Leads/orders required: lead_id, campaign_name; optional: created_at, lead_status, objection, agent, first_response_minutes, order_id, order_status, order_value, product_cost, shipping_cost, return_cost, payment_fees.
 
