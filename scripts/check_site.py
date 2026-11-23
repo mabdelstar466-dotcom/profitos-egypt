@@ -83,14 +83,14 @@ for page in PAGES:
             "campaignFile", "leadFile", "campaignTemplate", "leadTemplate",
             "exportBtn", "clearBtn", "authEmail", "authPassword",
             "magicLinkBtn", "signupBtn", "loginBtn", "forgotBtn",
-            "testConnectionBtn", "saveNewPasswordBtn",
+            "testConnectionBtn", "saveNewPasswordBtn", "backupBtn", "restoreBtn", "backupFile",
         }
         if required - parser.ids:
             errors.append(f"GlowSignal workspace missing controls: {sorted(required - parser.ids)}")
         source = page.read_text(encoding="utf-8")
         for feature in (
             "function aggregate()", "function testConnection()", "function resetPassword()",
-            "function saveNewPassword()", "replace_workspace_data", "costPerQualified",
+            "function saveNewPassword()", "function exportBackup()", "function restoreBackup(file)", "replace_workspace_data", "costPerQualified",
         ):
             if feature not in source:
                 errors.append(f"GlowSignal workspace missing feature: {feature}")
