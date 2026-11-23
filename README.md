@@ -13,7 +13,7 @@
 - تسجيل حساب بالبريد وكلمة المرور، ورابط دخول بالبريد، وتسجيل الدخول، وإعادة تعيين كلمة المرور عبر Supabase Auth.
 - مساحة عمل خاصة لكل حساب، وحفظ سحابي عبر Supabase Postgres عند اكتمال إعداد قاعدة البيانات.
 - سياسات Row Level Security لعزل بيانات مساحات العمل.
-- حفظ محلي احتياطي في المتصفح وتصدير ملخص أداء الحملات إلى CSV.
+- حفظ محلي احتياطي، وتنزيل واستعادة نسخة JSON كاملة، وتصدير تقرير أداء الحملات إلى CSV.
 
 ### ما لا يزال غير متاح
 - لم يتم تفعيل الاشتراكات أو تحصيل المدفوعات.
@@ -43,8 +43,8 @@
 ## تنسيق ملفات CSV
 
 ### الحملات
-الحقول المطلوبة: campaign_name, spend
-اختيارية: date, impressions, clicks, messages.
+الحقول المطلوبة: campaign_name (أو Campaign name)، spend (أو Amount spent)
+اختيارية: date / Reporting starts، impressions، clicks / Link clicks، messages / Messaging conversations started.
 
 ### العملاء والطلبات
 الحقول المطلوبة: lead_id, campaign_name
